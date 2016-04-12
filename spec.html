@@ -1210,6 +1210,17 @@
             </tr>
             <tr>
               <td>
+                [[SetImmutablePrototype]]
+              </td>
+              <td>
+                () <b>&rarr;</b> Boolean
+              </td>
+              <td>
+                Attempt to prohibit this object's inherited-properties association, as returned by [[GetPrototypeOf]], from being modified. Returns *true* indicating that the operation was completed successfully or *false* indicating that the operation was not successful.
+              </td>
+            </tr>
+            <tr>
+              <td>
                 [[IsExtensible]]
               </td>
               <td>
@@ -1380,7 +1391,7 @@
             The Type of the return value must be either Object or Null.
           </li>
           <li>
-            If target is non-extensible, and [[GetPrototypeOf]] returns a value v, then any future calls to [[GetPrototypeOf]] should return the SameValue as v.
+            If target has an immutable prototype, and [[GetPrototypeOf]] returns a value v, then any future calls to [[GetPrototypeOf]] should return the SameValue as v.
           </li>
         </ul>
         <emu-note>
@@ -1392,7 +1403,7 @@
             The Type of the return value must be Boolean.
           </li>
           <li>
-            If target is non-extensible, [[SetPrototypeOf]] must return false, unless V is the SameValue as the target's observed [[GetPrototypeOf]] value.
+            If target has an immutable prototype, [[SetPrototypeOf]] must return false, unless V is the SameValue as the target's observed [[GetPrototypeOf]] value.
           </li>
         </ul>
         <h2>[[IsExtensible]] ( )</h2>
@@ -1410,7 +1421,7 @@
             The Type of the return value must be Boolean.
           </li>
           <li>
-            If [[PreventExtensions]] returns true, all future calls to [[IsExtensible]] on the target must return false and the target is now considered non-extensible.
+            If [[PreventExtensions]] returns true, all future calls to [[IsExtensible]] on the target must return false and the target now has an immutable prototype.
           </li>
         </ul>
         <h2>[[GetOwnProperty]] (_P_)</h2>
@@ -6245,7 +6256,8 @@
   <emu-clause id="sec-ordinary-object-internal-methods-and-internal-slots">
     <h1>Ordinary Object Internal Methods and Internal Slots</h1>
     <p>All ordinary objects have an internal slot called [[Prototype]]. The value of this internal slot is either *null* or an object and is used for implementing inheritance. Data properties of the [[Prototype]] object are inherited (are visible as properties of the child object) for the purposes of get access, but not for set access. Accessor properties are inherited for both get access and set access.</p>
-    <p>Every ordinary object has a Boolean-valued [[Extensible]] internal slot that controls whether or not properties may be added to the object. If the value of the [[Extensible]] internal slot is *false* then additional properties may not be added to the object. In addition, if [[Extensible]] is *false* the value of the [[Prototype]] internal slot of the object may not be modified. Once the value of an object's [[Extensible]] internal slot has been set to *false* it may not be subsequently changed to *true*.</p>
+    <p>Every ordinary object has a Boolean-valued [[MutablePrototype]] internal slot. If the value of the [[MutablePrototype]] internal slot is *false* then the value of the [[Prototype]] internal slot may not be changed. Once the value of an object's [[MutablePrototype]] internal slot has been set to *false* it may not be subsequently changed to *true*.</p>
+    <p>Every ordinary object has a Boolean-valued [[Extensible]] internal slot that controls whether or not properties may be added to the object. If the value of the [[Extensible]] internal slot is *false* then additional properties may not be added to the object. In addition, if [[Extensible]] is *false* the value of the [[MutablePrototype]] internal slot of the object must be *false*. Once the value of an object's [[Extensible]] internal slot has been set to *false* it may not be subsequently changed to *true*.</p>
     <p>In the following algorithm descriptions, assume _O_ is an ordinary object, _P_ is a property key value, _V_ is any ECMAScript language value, and _Desc_ is a Property Descriptor record.</p>
     <p>Each ordinary object internal method delegates to a similarly-named abstract operation. If such an abstract operation depends on another internal method, then the internal method is invoked on _O_ rather than calling the similarly-named abstract operation directly. These semantics ensure that exotic objects have their overridden internal methods invoked when ordinary object internal methods are applied to them.</p>
 
@@ -6279,10 +6291,9 @@
         <p>When the abstract operation OrdinarySetPrototypeOf is called with Object _O_ and value _V_, the following steps are taken:</p>
         <emu-alg>
           1. Assert: Either Type(_V_) is Object or Type(_V_) is Null.
-          1. Let _extensible_ be the value of the [[Extensible]] internal slot of _O_.
           1. Let _current_ be the value of the [[Prototype]] internal slot of _O_.
           1. If SameValue(_V_, _current_) is *true*, return *true*.
-          1. If _extensible_ is *false*, return *false*.
+          1. If the value of the [[MutablePrototype]] internal slot of _O_ is *false*, return *false*.
           1. Let _p_ be _V_.
           1. Let _done_ be *false*.
           1. Repeat while _done_ is *false*,
@@ -6297,6 +6308,24 @@
         <emu-note>
           <p>The loop in step 8 guarantees that there will be no circularities in any prototype chain that only includes objects that use the ordinary object definitions for [[GetPrototypeOf]] and [[SetPrototypeOf]].</p>
         </emu-note>
+      </emu-clause>
+    </emu-clause>
+
+    <!-- es6num="9.1.1" -->
+    <emu-clause id="sec-ordinary-object-internal-methods-and-internal-slots-setimmutableprototype">
+      <h1>[[SetImmutablePrototype]] ( )</h1>
+      <p>When the [[SetImmutablePrototype]] internal method of _O_ is called, the following steps are taken:</p>
+      <emu-alg>
+        1. Return ! OrdinarySetImmutablePrototype(_O_).
+      </emu-alg>
+
+      <emu-clause id="sec-ordinarysetimmutableprototype" aoid="OrdinarySetImmutablePrototype">
+        <h1>OrdinarySetImmutablePrototype (_O_)</h1>
+        <p>When the abstract operation OrdinarySetImmutablePrototype is called with Object _O_, the following steps are taken:</p>
+        <emu-alg>
+          1. Set the value of the [[MutablePrototype]] internal slot of _O_ to *false*.
+          1. Return *true*.
+        </emu-alg>
       </emu-clause>
     </emu-clause>
 
@@ -6329,6 +6358,8 @@
         <h1>OrdinaryPreventExtensions (_O_)</h1>
         <p>When the abstract operation OrdinaryPreventExtensions is called with Object _O_, the following steps are taken:</p>
         <emu-alg>
+          1. Let _succeeded_ be ! _O_.[[SetImmutablePrototype]]().
+          1. If _succeeded_ is *false*, return *false*.
           1. Set the value of the [[Extensible]] internal slot of _O_ to *false*.
           1. Return *true*.
         </emu-alg>
@@ -6594,6 +6625,7 @@
         1. Let _obj_ be a newly created object with an internal slot for each name in _internalSlotsList_.
         1. Set _obj_'s essential internal methods to the default ordinary object definitions specified in <emu-xref href="#sec-ordinary-object-internal-methods-and-internal-slots"></emu-xref>.
         1. Set the [[Prototype]] internal slot of _obj_ to _proto_.
+        1. Set the [[MutablePrototype]] internal slot of _obj_ to *true*.
         1. Set the [[Extensible]] internal slot of _obj_ to *true*.
         1. Return _obj_.
       </emu-alg>
@@ -7192,6 +7224,7 @@
         1. Let _func_ be a new built-in function object that when called performs the action described by _steps_. The new function object has internal slots whose names are the elements of _internalSlotsList_. The initial value of each of those internal slots is *undefined*.
         1. Set the [[Realm]] internal slot of _func_ to _realm_.
         1. Set the [[Prototype]] internal slot of _func_ to _prototype_.
+        1. Set the [[MutablePrototype]] internal slot of _func_ to *true*.
         1. Set the [[Extensible]] internal slot of _func_ to *true*.
         1. Set the [[ScriptOrModule]] internal slot of _func_ to *null*.
         1. Return _func_.
@@ -7302,6 +7335,7 @@
           1. If _targetFunction_ has a [[Construct]] internal method, then
             1. Set the [[Construct]] internal method of _obj_ as described in <emu-xref href="#sec-bound-function-exotic-objects-construct-argumentslist-newtarget"></emu-xref>.
           1. Set the [[Prototype]] internal slot of _obj_ to _proto_.
+          1. Set the [[MutablePrototype]] internal slot of _obj_ to *true*.
           1. Set the [[Extensible]] internal slot of _obj_ to *true*.
           1. Set the [[BoundTargetFunction]] internal slot of _obj_ to _targetFunction_.
           1. Set the [[BoundThis]] internal slot of _obj_ to the value of _boundThis_.
@@ -7359,6 +7393,7 @@
           1. Set _A_'s essential internal methods except for [[DefineOwnProperty]] to the default ordinary object definitions specified in <emu-xref href="#sec-ordinary-object-internal-methods-and-internal-slots"></emu-xref>.
           1. Set the [[DefineOwnProperty]] internal method of _A_ as specified in <emu-xref href="#sec-array-exotic-objects-defineownproperty-p-desc"></emu-xref>.
           1. Set the [[Prototype]] internal slot of _A_ to _proto_.
+          1. Set the [[MutablePrototype]] internal slot of _A_ to *true*.
           1. Set the [[Extensible]] internal slot of _A_ to *true*.
           1. Perform ! OrdinaryDefineOwnProperty(_A_, `"length"`, PropertyDescriptor{[[Value]]: _length_, [[Writable]]: *true*, [[Enumerable]]: *false*, [[Configurable]]: *false*}).
           1. Return _A_.
@@ -7496,6 +7531,7 @@
           1. Set the [[GetOwnProperty]] internal method of _S_ as specified in <emu-xref href="#sec-string-exotic-objects-getownproperty-p"></emu-xref>.
           1. Set the [[OwnPropertyKeys]] internal method of _S_ as specified in <emu-xref href="#sec-string-exotic-objects-ownpropertykeys"></emu-xref>.
           1. Set the [[Prototype]] internal slot of _S_ to _prototype_.
+          1. Set the [[MutablePrototype]] internal slot of _S_ to *true*.
           1. Set the [[Extensible]] internal slot of _S_ to *true*.
           1. Let _length_ be the number of code unit elements in _value_.
           1. Perform ! DefinePropertyOrThrow(_S_, `"length"`, PropertyDescriptor{[[Value]]: _length_, [[Writable]]: *false*, [[Enumerable]]: *false*, [[Configurable]]: *false* }).
@@ -7664,6 +7700,7 @@
           1. Set the [[Delete]] internal method of _obj_ as specified in <emu-xref href="#sec-arguments-exotic-objects-delete-p"></emu-xref>.
           1. Set the remainder of _obj_'s essential internal methods to the default ordinary object definitions specified in <emu-xref href="#sec-ordinary-object-internal-methods-and-internal-slots"></emu-xref>.
           1. Set the [[Prototype]] internal slot of _obj_ to %ObjectPrototype%.
+          1. Set the [[MutablePrototype]] internal slot of _obj_ to *true*.
           1. Set the [[Extensible]] internal slot of _obj_ to *true*.
           1. Let _map_ be ObjectCreate(*null*).
           1. Set the [[ParameterMap]] internal slot of _obj_ to _map_.
@@ -7872,6 +7909,7 @@
           1. Set the [[Set]] internal method of _A_ as specified in <emu-xref href="#sec-integer-indexed-exotic-objects-set-p-v-receiver"></emu-xref>.
           1. Set the [[OwnPropertyKeys]] internal method of _A_ as specified in <emu-xref href="#sec-integer-indexed-exotic-objects-ownpropertykeys"></emu-xref>.
           1. Set the [[Prototype]] internal slot of _A_ to _prototype_.
+          1. Set the [[MutablePrototype]] internal slot of _A_ to *true*.
           1. Set the [[Extensible]] internal slot of _A_ to *true*.
           1. Return _A_.
         </emu-alg>
@@ -7983,6 +8021,15 @@
       <emu-clause id="sec-module-namespace-exotic-objects-setprototypeof-v">
         <h1>[[SetPrototypeOf]] (_V_)</h1>
         <p>When the [[SetPrototypeOf]] internal method of a module namespace exotic object _O_ is called with argument _V_, the following steps are taken:</p>
+        <emu-alg>
+          1. Assert: Either Type(_V_) is Object or Type(_V_) is Null.
+          1. Return *false*.
+        </emu-alg>
+      </emu-clause>
+
+      <emu-clause id="sec-module-namespace-exotic-objects-setimmutableprototype-v">
+        <h1>[[SetImmutablePrototype]] (_V_)</h1>
+        <p>When the [[SetImmutablePrototype]] internal method of a module namespace exotic object _O_ is called with argument _V_, the following steps are taken:</p>
         <emu-alg>
           1. Assert: Either Type(_V_) is Object or Type(_V_) is Null.
           1. Return *false*.
@@ -8118,22 +8165,6 @@
         </emu-alg>
       </emu-clause>
     </emu-clause>
-
-    <emu-clause id="sec-immutable-prototype-exotic-objects">
-      <h1>Immutable Prototype Exotic Objects</h1>
-      <p>An <dfn>immutable prototype exotic object</dfn> is an exotic object that has an immutable [[Prototype]] internal slot.</p>
-
-      <emu-clause id="sec-immutable-prototype-exotic-objects-setprototypeof-v">
-        <h1>[[SetPrototypeOf]] (_V_)</h1>
-        <p>When the [[SetPrototypeOf]] internal method of an immutable prototype exotic object _O_ is called with argument _V_, the following steps are taken:</p>
-        <emu-alg>
-          1. Assert: Either Type(_V_) is Object or Type(_V_) is Null.
-          1. Let _current_ be the value of the [[Prototype]] internal slot of _O_.
-          1. If SameValue(_V_, _current_) is *true*, return *true*.
-          1. Return *false*.
-        </emu-alg>
-      </emu-clause>
-    </emu-clause>
   </emu-clause>
 
   <!-- es6num="9.5" -->
@@ -8165,6 +8196,14 @@
           </td>
           <td>
             `setPrototypeOf`
+          </td>
+        </tr>
+        <tr>
+          <td>
+            [[SetImmutablePrototype]]
+          </td>
+          <td>
+            `setImmutablePrototype`
           </td>
         </tr>
         <tr>
@@ -8330,6 +8369,39 @@
       </emu-note>
     </emu-clause>
 
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-setimmutableprototype">
+      <h1>[[SetImmutablePrototype]] ( )</h1>
+      <p>When the [[SetImmutablePrototype]] internal method of a Proxy exotic object _O_ is called, the following steps are taken:</p>
+      <emu-alg>
+        1. Let _handler_ be the value of the [[ProxyHandler]] internal slot of _O_.
+        1. If _handler_ is *null*, throw a *TypeError* exception.
+        1. Assert: Type(_handler_) is Object.
+        1. Let _target_ be the value of the [[ProxyTarget]] internal slot of _O_.
+        1. Let _trap_ be ? GetMethod(_handler_, `"setImmutablePrototype"`).
+        1. If _trap_ is *undefined*, then
+          1. Return ? _target_.[[SetImmutablePrototype]]().
+        1. Let _success_ be ? Call(_trap_, _handler_, &laquo; _target_ &raquo;).
+        1. Assert: Type(_success_) is Boolean.
+        XXX stuff jwalden XXX
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. If _extensibleTarget_ is *true*, return _handlerProto_.
+        1. Let _targetProto_ be ? _target_.[[GetPrototypeOf]]().
+        1. If SameValue(_handlerProto_, _targetProto_) is *false*, throw a *TypeError* exception.
+        1. Return _handlerProto_.
+      </emu-alg>
+      <emu-note>
+        <p>[[SetImmutablePrototype]] for proxy objects enforces the following invariant:</p>
+        <ul>
+          <li>
+            The result of [[SetImmutablePrototype]] must be a Boolean.
+          </li>
+          <li> XXX jwalden another? VVV
+            If the target object is not extensible, [[GetPrototypeOf]] applied to the proxy object must return the same value as [[GetPrototypeOf]] applied to the proxy object's target object.
+          </li>
+        </ul>
+      </emu-note>
+    </emu-clause>
+
     <!-- es6num="9.5.3" -->
     <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-isextensible">
       <h1>[[IsExtensible]] ( )</h1>
@@ -8374,6 +8446,7 @@
           1. Return ? _target_.[[PreventExtensions]]().
         1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, &laquo; _target_ &raquo;)).
         1. If _booleanTrapResult_ is *true*, then
+          1. XXX jwalden query somehow? XXX
           1. Let _targetIsExtensible_ be ? _target_.[[IsExtensible]]().
           1. If _targetIsExtensible_ is *true*, throw a *TypeError* exception.
         1. Return _booleanTrapResult_.
@@ -21660,7 +21733,9 @@ eval("1;var a;")
     <p>Implementations that add additional capabilities to the set of built-in functions are encouraged to do so by adding new functions rather than adding new parameters to existing functions.</p>
   </emu-note>
   <p>Unless otherwise specified every built-in function and every built-in constructor has the Function prototype object, which is the initial value of the expression `Function.prototype` (<emu-xref href="#sec-properties-of-the-function-prototype-object"></emu-xref>), as the value of its [[Prototype]] internal slot.</p>
+  <p>Unless otherwise specified the value of the [[MutablePrototype]] internal slot on every built-in function and every built-in constructor is *true*.</p>
   <p>Unless otherwise specified every built-in prototype object has the Object prototype object, which is the initial value of the expression `Object.prototype` (<emu-xref href="#sec-properties-of-the-object-prototype-object"></emu-xref>), as the value of its [[Prototype]] internal slot, except the Object prototype object itself.</p>
+  <p>Unless otherwise specified the value of the [[MutablePrototype]] internal slot on every built-in prototype object is *true*.</p>
   <p>Built-in function objects that are not identified as constructors do not implement the [[Construct]] internal method unless otherwise specified in the description of a particular function.</p>
   <p>Unless otherwise specified, each built-in function defined in this specification is created as if by calling the CreateBuiltinFunction abstract operation (<emu-xref href="#sec-createbuiltinfunction"></emu-xref>).</p>
   <p>Every built-in function object, including constructors, has a `length` property whose value is an integer. Unless otherwise specified, this value is equal to the largest number of named arguments shown in the subclause headings for the function description. Optional parameters (which are indicated with brackets: `[` `]`) or rest parameters (which are shown using the form &laquo;...name&raquo;) are not included in the default argument count.</p>
@@ -21681,6 +21756,7 @@ eval("1;var a;")
   <p>The global object does not have a [[Construct]] internal method; it is not possible to use the global object as a constructor with the `new` operator.</p>
   <p>The global object does not have a [[Call]] internal method; it is not possible to invoke the global object as a function.</p>
   <p>The value of the [[Prototype]] internal slot of the global object is implementation-dependent.</p>
+  <p>The value of the [[MutablePrototype]] internal slot of the global object is *false*.
   <p>In addition to the properties defined in this specification the global object may have additional host defined properties. This may include a property whose value is the global object itself; for example, in the HTML document object model the `window` property of the global object is the global object itself.</p>
 
   <!-- es6num="18.1" -->
@@ -22843,8 +22919,8 @@ eval("1;var a;")
     <!-- es6num="19.1.3" -->
     <emu-clause id="sec-properties-of-the-object-prototype-object">
       <h1>Properties of the Object Prototype Object</h1>
-      <p>The Object prototype object is the intrinsic object <dfn>%ObjectPrototype%</dfn>. The Object prototype object is an immutable prototype exotic object.</p>
-      <p>The value of the [[Prototype]] internal slot of the Object prototype object is *null* and the initial value of the [[Extensible]] internal slot is *true*.</p>
+      <p>The Object prototype object is the intrinsic object <dfn>%ObjectPrototype%</dfn>. The Object prototype object is an ordinary object.</p>
+      <p>The value of the [[Prototype]] internal slot of the Object prototype object is *null*, the value of the [[MutablePrototype]] internal slot is *false*, and the initial value of the [[Extensible]] internal slot is *true*.</p>
 
       <!-- es6num="19.1.3.1" -->
       <emu-clause id="sec-object.prototype.constructor">
@@ -35206,6 +35282,16 @@ my_text = JSON.stringify(a); // This must throw a TypeError.
         1. If _receiver_ is not present, then
           1. Let _receiver_ be _target_.
         1. Return ? _target_.[[Set]](_key_, _V_, _receiver_).
+      </emu-alg>
+    </emu-clause>
+
+    <!-- es6num="26.1.8" -->
+    <emu-clause id="sec-reflect.setimmutableprototype">
+      <h1>Reflect.setImmutablePrototype ( _target_ )</h1>
+      <p>When the `setImmutablePrototype` function is called with argument _target_, the following steps are taken:</p>
+      <emu-alg>
+        1. If Type(_target_) is not Object, throw a *TypeError* exception.
+        1. Return ? _target_.[[SetImmutablePrototype]]().
       </emu-alg>
     </emu-clause>
 
